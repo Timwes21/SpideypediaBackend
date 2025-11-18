@@ -33,9 +33,10 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
     let user = state.collection.find_one(doc! {"tokens": &token}).await.unwrap();
     if let Some(user) = user {
         println!("found user");
-        let json_user = serde_json::to_string(&user).unwrap();
+        println!("{:?}", user.user_info);
+        let json_user = serde_json::to_string(&user.characters).unwrap();
         if socket.send( Message::Text(json_user.into())).await.is_err() {
-            println!("there was an error");
+            println!("there was an error sending the message");
             return;
         }
     }
@@ -45,13 +46,12 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
     sink.subscribe("charUpdates").await.unwrap();
     while let Some(msg) = stream.next().await{
         let payload: String = msg.get_payload().unwrap();
-        println!("channel '{}': {}", msg.get_channel_name(), payload);
         if payload == token {
             let user = state.collection.find_one(doc! {"tokens": &token}).await.unwrap();
             if let Some(user) = user {
-                let json_users = serde_json::to_string(&user).unwrap();
+                let json_users = serde_json::to_string(&user.characters).unwrap();
                 if socket.send( Message::Text(json_users.into())).await.is_err() {
-                    // client disconnected
+                    println!("there was an error sending the message");
                     return;
                 }
             }

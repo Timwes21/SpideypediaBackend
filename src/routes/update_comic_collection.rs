@@ -39,7 +39,7 @@ pub async fn add_character(State(state): State<AppState>, Json(payload): Json<Ch
 
 pub async fn add_title(State(state): State<AppState>, Json(payload): Json<AddToCharacterData>){
     let filter = payload.get_filter();
-    let update = payload.get_update("$set");
+    let update = payload.get_update();
     let result = state.collection.update_one(filter, update).await;
     if let Err(e) = result {
         println!("There was an error adding a title: {e:?}");
@@ -139,7 +139,7 @@ pub async fn delete_character( State(state): State<AppState>, Json(payload): Jso
 pub async fn add_volume(State(state): State<AppState>, Json(payload): Json<AddToCharacterData>){
     println!("in add volume");
     let filter = payload.get_filter();
-    let update = payload.get_update("$set");
+    let update = payload.get_update();
 
     let result = state.collection.update_one(filter, update).await;
 
@@ -151,9 +151,10 @@ pub async fn add_volume(State(state): State<AppState>, Json(payload): Json<AddTo
 }
 
 pub async fn delete_volume(State(state): State<AppState>, Json(payload): Json<AddToCharacterData>){
-    println!("in add volume");
+    println!("in delete volume");
     let filter = payload.get_filter();
-    let update = payload.get_update("$unset");
+    let update = payload.get_remove();
+    
 
     let result = state.collection.update_one(filter, update).await;
 

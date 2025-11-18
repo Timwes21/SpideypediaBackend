@@ -88,11 +88,22 @@ impl AddToCharacterData {
 
     }
 
-    pub fn get_update(&self, operation: &str)-> Document{
+    pub fn get_update(&self)-> Document{
         let path = self.character_data.get_path();
-        let update = doc! {operation: {path: {}}};
+        let update = doc! {"$set": {path: {}}};
         update
         // const finalResult = await collection.updateOne({tokens : token},{$set: {[key]: {}}});
+    }
+
+    pub fn get_remove(&self)->Document{
+        let character_data = &self.character_data;
+        let path =  {format!("characters.{}.{}.{}.{}", 
+                                                    character_data.character,
+                                                    character_data.title_type,
+                                                    character_data.title_name,
+                                                    character_data.vol.as_ref().unwrap())};
+        let update = doc! {"$unset": {path: ""}};
+        update
     }
 }
 

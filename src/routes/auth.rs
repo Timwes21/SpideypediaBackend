@@ -1,4 +1,9 @@
+use mongodb::bson::doc;
+use serde::{Deserialize, Serialize};
+use axum::{Json, extract::{Multipart, State}, http::StatusCode};
+use crate::{app_state::AppState, mongo_handler::Users, routes};
 async fn login(){
+
 
 }
 
@@ -7,10 +12,20 @@ async fn logout(){
 
 }
 
+#[derive(Deserialize, Debug)]
+pub struct UserInfo {
+    username: String,
+    password: String,
+    email: String,
+    #[serde(rename="phoneNumber")]
+    phone_number: String
+}
 
-async fn create_user(request: Request){
-    let body = request.body();
+pub async fn create_user(State(state): State<AppState>, Json(payload): Json<UserInfo>){
     println!("In creating user route user");
+    let filter = doc! {"userInfo.username": payload.username};
+    let cursor = state.collection.find(filter).await.unwrap();
+    
         
     // try{
     //     const token = await createUser(data, collection);

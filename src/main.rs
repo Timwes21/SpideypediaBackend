@@ -10,8 +10,8 @@ use axum::{
     routing::{delete, get, post, put, any}
 };
 use mongodb::{
-    Client, 
-    Collection, 
+    Client,
+    Collection,
     bson::{doc, oid::ObjectId, Document}, 
     results::{DeleteResult, InsertOneResult, UpdateResult}
 };
@@ -24,7 +24,8 @@ use tower_http::cors::{CorsLayer, Any};
 use crate::{
     routes::{
         update_comic_collection::{add_character, add_title, add_volume, delete_character, delete_issue, delete_volume, update_details},
-        get_comic_collection::{ handler}
+        get_comic_collection::{ handler},
+        auth::{create_user}
     },
         
     };
@@ -32,7 +33,7 @@ use crate::redis_handler::get_client;
 
 #[tokio::main]
 async fn main() {
-    let i = dotenv().ok();
+    dotenv().ok();
     
 
     let state = build_state().await;
@@ -40,7 +41,6 @@ async fn main() {
     let cors_middleware = CorsLayer::new().allow_origin(Any).allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION]);
     
     let app: Router = Router::new()
-        // .route("/", get(get_m))
         .route("/delete-char", post(delete_character))//this works
         .route("/update-details", post(update_details))//this works
         .route("/add-character", post(add_character))//this works
@@ -48,6 +48,7 @@ async fn main() {
         .route("/add-title", post(add_title))//this works
         .route("/add-vol", post(add_volume))//this works
         .route("/delete-vol", post(delete_volume))
+        .route("/create-user", post(create_user))
         .route("/", any(handler))
         .layer(cors_middleware)
         .with_state(state);
