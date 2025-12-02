@@ -79,7 +79,9 @@ impl CharacterData {
 pub struct AddToCharacterData {
     #[serde(rename="characterData")]
     pub character_data: CharacterData,
-    pub token: String
+    pub token: String,
+    #[serde(rename="imageNames")]
+    pub image_names: Option<Vec<String>>
 }
 
 impl AddToCharacterData {

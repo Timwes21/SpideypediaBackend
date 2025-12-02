@@ -2,6 +2,9 @@ mod routes;
 mod app_state;
 mod mongo_handler;
 mod redis_handler;
+mod encryption;
+mod minio_client;
+mod my_errors;
 
 use axum::{
     Json, Router, 
@@ -9,27 +12,17 @@ use axum::{
     http::{StatusCode, header}, 
     routing::{delete, get, post, put, any}
 };
-use mongodb::{
-    Client,
-    Collection,
-    bson::{doc, oid::ObjectId, Document}, 
-    results::{DeleteResult, InsertOneResult, UpdateResult}
-};
 use dotenvy::dotenv;
-use serde::{Deserialize, Serialize};
-use tower_http::trace::TraceLayer;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use app_state::{build_state, AppState};
+use app_state::{build_state};
 use tower_http::cors::{CorsLayer, Any};
 use crate::{
     routes::{
         update_comic_collection::{add_character, add_title, add_volume, delete_character, delete_issue, delete_volume, update_details},
         get_comic_collection::{ handler},
-        auth::{create_user}
+        auth::{create_user, login, logout}
     },
         
-    };
-use crate::redis_handler::get_client;
+};
 
 #[tokio::main]
 async fn main() {
@@ -49,6 +42,8 @@ async fn main() {
         .route("/add-vol", post(add_volume))//this works
         .route("/delete-vol", post(delete_volume))
         .route("/create-user", post(create_user))
+        .route("/login", post(login))//this works
+        .route("/logout", post(logout))
         .route("/", any(handler))
         .layer(cors_middleware)
         .with_state(state);
@@ -71,4 +66,6 @@ async fn main() {
 async fn get_m(){
     println!("Hello");
 }
+
+
 

@@ -1,39 +1,33 @@
 use axum::{
-    Json,
-    body::Body,
-    http::StatusCode,
     extract::{
-        Multipart, State, Path,
+        State,
         ws::{WebSocket, WebSocketUpgrade, Message}
     },
     response::{IntoResponse, Response},
 };
 use futures_util::StreamExt;
 use redis::{ AsyncCommands, PubSub, RedisError, ToRedisArgs, TypedCommands};
-use serde::{Deserialize, Serialize};
-use std::{any::type_name_of_val, fmt::Error};
 use mongodb::{
-    Collection, bson::{self, Document, doc}, results::UpdateResult
+    bson::{self, Document, doc}
 };
-use crate::{app_state::AppState, mongo_handler::Users, routes};
+use crate::{app_state::AppState};
 
-
+// relying on unwrap until I figure out how to use 
+// handle_socket in a result enum with ws.on_upgrade
+// or until I find another way
 
 
 pub async fn handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Response {
-    println!("made it");
     ws.on_upgrade(move|socket| handle_socket(socket, state))
 }
 
 
-async fn handle_socket(mut socket: WebSocket, state: AppState) {
+async fn handle_socket(mut socket: WebSocket, state: AppState)  {
     let msg_from_client = socket.recv().await.unwrap().unwrap();
     let token = msg_from_client.to_text().unwrap();
 
     let user = state.collection.find_one(doc! {"tokens": &token}).await.unwrap();
     if let Some(user) = user {
-        println!("found user");
-        println!("{:?}", user.user_info);
         let json_user = serde_json::to_string(&user.characters).unwrap();
         if socket.send( Message::Text(json_user.into())).await.is_err() {
             println!("there was an error sending the message");
@@ -44,7 +38,7 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
     let pub_sub = client.get_async_pubsub().await.unwrap();
     let (mut sink, mut stream) = pub_sub.split();
     sink.subscribe("charUpdates").await.unwrap();
-    while let Some(msg) = stream.next().await{
+    while let Some(msg) = stream.next().await {
         let payload: String = msg.get_payload().unwrap();
         if payload == token {
             let user = state.collection.find_one(doc! {"tokens": &token}).await.unwrap();
@@ -59,4 +53,5 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
 
         }
     }
+
 }
