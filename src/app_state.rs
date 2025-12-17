@@ -14,7 +14,7 @@ pub struct AppState {
 
 pub async fn build_state()-> AppState{
     let collection = get_collection().await;
-    let minio_client = MinioClient::new();
+    let minio_client = MinioClient::new().await;
 
     let redis_client = get_client();
 

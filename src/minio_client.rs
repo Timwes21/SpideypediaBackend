@@ -1,11 +1,11 @@
 use bytes::Bytes;
-use minio::s3::{
-    Client, ClientBuilder, creds::StaticProvider, http::BaseUrl, segmented_bytes::SegmentedBytes, types::S3Api, builders::ObjectToDelete
-};
 use tokio::task::JoinError;
 use std::{env, str::FromStr};
+use aws_sdk_s3::{self as s3, Client, config::{self, Region, ProvideCredentials, Credentials}, types::{Delete, ObjectIdentifier}};
+use aws_smithy_types::byte_stream::ByteStream;
+use aws_config::{BehaviorVersion, environment::credentials, load_defaults, meta::credentials::CredentialsProviderChain};
 
-use crate::encryption;
+
 use std::sync::Arc;
 
 
@@ -16,47 +16,99 @@ pub struct MinioClient{
 }
 
 impl MinioClient{
-    pub fn new()-> Self{
+    pub async fn new()-> Self{
         let endpoint = env::var("MINIO_URL").unwrap();
         let key = env::var("MINIO_ACCESS_KEY").unwrap();
         // let bucket_name = env::var("BUCKET_NAME");
         
-        let provider = StaticProvider::new(key.as_str(), key.as_str(), None);
         
-        let base_url = BaseUrl::from_str(endpoint.as_str()).unwrap();
+
+        let credentials = Credentials::new(key.to_string(), key.to_string(), None, None, "railway");
+
+
+        let behavior_version = BehaviorVersion::latest();
+        let config = aws_config::load_defaults(behavior_version).await;
+        let client_config = config::Builder::from(&config)
+                                .endpoint_url(endpoint)
+                                .credentials_provider(credentials)
+                                .force_path_style(true)
+                                .region(Region::new("us-east-1"))
+                                .build();
+
         
         Self {
-            client: Arc::new(ClientBuilder::new(base_url)
-                .provider(Some(Box::new(provider)))
-                .build()
-                .expect("Did not build minio client")),
+            client: Arc::new(Client::from_conf(client_config)),
             bucket_name: "python-test-bucket".to_string()
         }
 
     }
 
-    pub async fn add_object(&self, bytes: Bytes, username: &String)->Result<String, minio::s3::error::Error>{
-        let object_name = encryption::get_token();
-        let key = self.get_key(username, object_name);
-        let data = SegmentedBytes::from(bytes);
-        self.client.put_object(&self.bucket_name, &key, data).send().await?;
-        Ok(key)
+    pub async fn add_object(&self, bytes: Bytes, image_path: &String)->Result<(), Box<dyn std::error::Error>>{
+        let byte_stream = bytes.into();
+        
+        self.client.put_object()
+            .bucket(&self.bucket_name)
+            .key(image_path)
+            .body(byte_stream)
+            .send()
+            .await?;
+
+        Ok(())
     }
 
-    pub async fn delete_object(&self, key: String, username: &String)->Result<(), JoinError>{
-        let key= self.get_key(username, key);
-        let object = ObjectToDelete::from(key);
-        let client = Arc::clone(&self.client);
-        let bucket_name = self.bucket_name.clone();
-        tokio::task::spawn_blocking(move|| {
-            client.delete_object(bucket_name, object);
-        }).await?;
+    pub async fn delete_object(&self, key: String)->Result<(), Box<dyn std::error::Error>>{
+        let res = self.client.delete_object()
+            .bucket(&self.bucket_name)
+            .key(key)
+            .send()
+            .await;
+
+        if let Err(e) = res{
+            println!("there was an error deleting the image");
+            println!("{e:?}");
+        }
         Ok(())
 
     }
 
-    pub fn get_key(&self, username: &String, key: String)-> String{
-        format!("{}/images/{}", username, key)
+    pub async fn delete_objects(&self, prefix: String)->Result<(), Box<dyn std::error::Error>>{
+        let mut object_ids = Vec::new();
+        let prefix = format!("{}/{}", &self.bucket_name, prefix);
+        let mut objects = self.client.list_objects_v2()
+                                                .bucket(&self.bucket_name)
+                                                .prefix(prefix)
+                                                .into_paginator()
+                                                .send();
+
+
+
+        while let Some(e) = objects.next().await{
+            let page = e?.contents.unwrap();
+
+            for obj in page {
+                let key = obj.key().unwrap();
+                let obj_id = ObjectIdentifier::builder()
+                                                    .key(key)
+                                                    .build()?;
+                object_ids.push(obj_id);
+
+            }
+
+            if object_ids.is_empty(){
+                return Ok(())
+            }
+
+        }
+        
+        let delete = Delete::builder().set_objects(Some(object_ids)).build()?;
+
+        self.client.delete_objects()
+            .bucket(&self.bucket_name)
+            .delete(delete).send()
+            .await?;
+        
+        Ok(())
     }
+
 }
 

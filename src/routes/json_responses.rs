@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize};
 use tracing_subscriber::fmt::format;
 use std::collections::HashMap;
 use mongodb::{
@@ -7,13 +7,15 @@ use mongodb::{
     error::Error
 };
 
+use crate::routes::route_errors::RouteError;
+
 
 
 
 #[derive(serde::Deserialize, Debug)]
 pub struct CharacterLoad{
     pub character: String,
-    pub token: String
+    pub token: String,
 }
 
 impl CharacterLoad{
@@ -21,6 +23,7 @@ impl CharacterLoad{
         doc! {"tokens": &self.token}
 
     }
+
 }
 
 
@@ -36,13 +39,12 @@ pub struct CharacterData {
     #[serde(rename="issueNumber")]
     pub issue_number: Option<String>
 }
+
 impl CharacterData {
     pub fn get_path(&self)-> String{
-
         let path = match &self.vol {
             Some(vol) => {
                 if let Some(issue_number) = &self.issue_number{
-
                     format!("characters.{}.{}.{}.{}.{}", 
                                                     self.character,
                                                     self.title_type,
@@ -58,7 +60,7 @@ impl CharacterData {
                 
             },
             _ => {
-                format!("characters.{}.{}.{}", 
+                format!("characters.{}.{}.{}",
                                         self.character,
                                         self.title_type,
                                         self.title_name)
@@ -70,6 +72,26 @@ impl CharacterData {
     }
 
 
+    pub fn get_image_path_issue(&self, username: &String)-> Result<String, RouteError>{
+        let image_name = format!("{}/{}/{}/{}/{}/{}", username,
+                                    self.character, 
+                                    self.title_type,
+                                    self.title_name,
+                                    self.vol.as_ref().ok_or(RouteError::OptionError)?,
+                                    self.issue_number.as_ref().ok_or(RouteError::OptionError)?);
+        let image_name = image_name.replace(" ", "-");
+        Ok(image_name)
+    }
+
+
+    pub fn get_image_vol_prefix(&self, username: &String) -> Result<String, RouteError>{
+        Ok(format!("{}/{}/{}/{}/{}", username, 
+                        self.character, 
+                        self.title_type,
+                        self.title_name,
+                        self.vol.as_ref().ok_or(RouteError::OptionError)?))
+    }
+
     
 
 }
@@ -80,8 +102,6 @@ pub struct AddToCharacterData {
     #[serde(rename="characterData")]
     pub character_data: CharacterData,
     pub token: String,
-    #[serde(rename="imageNames")]
-    pub image_names: Option<Vec<String>>
 }
 
 impl AddToCharacterData {
@@ -114,7 +134,8 @@ impl AddToCharacterData {
 pub struct DeleteIssueData{
     pub token: String,
     #[serde(rename="characterData")]
-    pub character_data: CharacterData
+    pub character_data: CharacterData,
+    pub image_name: Option<String>
 }
 
 impl DeleteIssueData{

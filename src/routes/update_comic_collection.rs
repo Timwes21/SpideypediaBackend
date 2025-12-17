@@ -49,6 +49,10 @@ pub async fn delete_issue(State(state): State<AppState>, Json(payload): Json<Del
     let filter = payload.get_filter();
     let update = payload.get_update();
     state.collection.update_one(filter, update).await?;
+
+    if let Some(image_name) = payload.image_name{
+        state.minio_client.delete_object(image_name).await.map_err(|_| RouteError::MinioError)?;
+    }
     
     publish(state.redis_client, payload.token).await?;
     Ok(())
@@ -65,7 +69,6 @@ pub async fn update_details(State(state): State<AppState>, mut multipart: Multip
     let mut issue_details: Option<Document> = None;
     let mut character_data: Option<CharacterData> = None;
     let mut image_bytes:Option<Bytes> = None;
-    let mut previous_image_name: Option<String> = None;
     
     while let Some(field) = multipart.next_field().await? {
         let name = field.name().unwrap_or("");
@@ -85,10 +88,6 @@ pub async fn update_details(State(state): State<AppState>, mut multipart: Multip
             "image" => {
                 image_bytes = field.bytes().await.ok();
             },
-            "prevImageName" => {
-                let s = field.text().await?;
-                previous_image_name = serde_json::from_str(s.as_str()).ok();
-            }
             _ => {}
         }
     }
@@ -103,18 +102,14 @@ pub async fn update_details(State(state): State<AppState>, mut multipart: Multip
 
     state.collection.update_one(filter, update).await?;
 
-    if let Some(bytes) = image_bytes{
+    if let Some(bytes) = image_bytes {
+        println!("has image bytes");
         let user = state.collection.find_one(doc! {"tokens": token}).await?.ok_or(RouteError::MongoError)?;
-        let key = state.minio_client.add_object(bytes, &user.user_info.username).await?;
+        let image_name = character_data.get_image_path_issue(&user.user_info.username)?;
+        state.minio_client.add_object(bytes, &image_name).await.map_err(|_| RouteError::MinioError)?;
         let path = format!("{}.imageName", character_data.get_path());
-        state.collection.update_one(doc! {"tokens": token}, doc! {"$set": {path: key}}).await?;
-        if let Some(previous_image_name) = previous_image_name{
-            state.minio_client.delete_object(previous_image_name, &user.user_info.username).await?;
-        }
-
-
-        
-
+        println!("image name: {image_name}");
+        state.collection.update_one(doc! {"tokens": token}, doc! {"$set": {path: image_name}}).await?;
     }
     
     publish(state.redis_client, token.to_owned()).await?;
@@ -132,7 +127,12 @@ pub async fn delete_character( State(state): State<AppState>, Json(payload): Jso
     let filter = payload.get_filter();
     let path = format!("characters.{}", payload.character);
 
-    state.collection.update_one(filter, doc! {"$unset": {path: ""}}).await?;    
+    state.collection.update_one(filter, doc! {"$unset": {path: ""}}).await?;  
+
+    let user = state.collection.find_one(payload.get_filter()).await?.ok_or(RouteError::MongoError)?;
+    let prefix = format!("{}/{}", &user.user_info.username, payload.character);
+    state.minio_client.delete_objects(prefix).await.map_err(|_|RouteError::MinioError)?;  
+
 
     publish(state.redis_client, payload.token).await?;
     Ok(())
@@ -158,13 +158,10 @@ pub async fn delete_volume(State(state): State<AppState>, Json(payload): Json<Ad
 
     state.collection.update_one(filter, update).await?;
 
-    if let Some(image_names) = payload.image_names{
-        let user = state.collection.find_one(doc! {"tokens": &payload.token}).await?.ok_or(RouteError::OptionError)?;
-        for image_name in image_names{
-            state.minio_client.delete_object(image_name, &user.user_info.username).await?;
+    let user = state.collection.find_one(payload.get_filter()).await?.ok_or(RouteError::MongoError)?;
+    let prefix = payload.character_data.get_image_vol_prefix(&user.user_info.username)?;
+    state.minio_client.delete_objects(prefix).await.map_err(|_|RouteError::MinioError)?;
 
-        }
-    }
 
 
     

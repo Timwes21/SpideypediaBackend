@@ -4,7 +4,6 @@ mod mongo_handler;
 mod redis_handler;
 mod encryption;
 mod minio_client;
-mod my_errors;
 
 use axum::{
     Json, Router, 
