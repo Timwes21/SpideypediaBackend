@@ -23,7 +23,6 @@ pub async fn handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Res
 
 
 async fn handle_socket(mut socket: WebSocket, state: AppState)  {
-    println!("in handle socket");
     let msg_from_client = socket.recv().await.unwrap().unwrap();
     let token = msg_from_client.to_text().unwrap();
 
