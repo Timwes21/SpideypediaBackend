@@ -47,7 +47,7 @@ async fn main() {
         .layer(cors_middleware)
         .with_state(state);
 
-    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], 3000));
     println!("listening on http://{addr}");
     let request_service = axum::serve(tokio::net::TcpListener::bind(addr).await.unwrap(), app)
         .await;
